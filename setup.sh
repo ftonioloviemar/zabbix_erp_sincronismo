@@ -85,5 +85,5 @@ echo "Script lancador criado e configurado."
 
 echo "--- Setup Concluido! ---"
 echo "Por favor, configure o item no Zabbix com a seguinte chave:"
-echo "Key: zabbix_erp_sincronismo/${LAUNCHER_SCRIPT_NAME}[\"--url\",\"{$ERP.URL}\",\"--username\",\"{$ERP.USER}\",\"--max-delay\",\"{$MAX.DELAY}\"]"
-echo "Lembre-se de definir as macros {$ERP.URL}, {$ERP.USER} e {$MAX.DELAY} no Zabbix."
+echo "Key: zabbix_erp_sincronismo/${LAUNCHER_SCRIPT_NAME}[\"--url\",\"{\$ERP.URL}\",\"--username\",\"{\$ERP.USER}\",\"--max-delay\",\"{\$MAX.DELAY}\"]"
+echo "Lembre-se de definir as macros {\$ERP.URL}, {\$ERP.USER} e {\$MAX.DELAY} no Zabbix."
