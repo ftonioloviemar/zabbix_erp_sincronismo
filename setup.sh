@@ -1,8 +1,8 @@
 #!/bin/bash
 # Script de Setup para Monitoramento Zabbix ERP Sincronismo
 
-PROJECT_DIR="/opt/zabbix_erp_sincronismo"
-ZABBIX_EXTERNAL_SCRIPTS_DIR="/usr/lib/zabbix/externalscripts"
+PROJECT_DIR="/usr/lib/zabbix/externalscripts/zabbix_erp_sincronismo"
+ZABBIX_EXTERNAL_SCRIPTS_DIR="/usr/lib/zabbix/externalscripts" # Diretorio pai
 LAUNCHER_SCRIPT_NAME="check_erp_sincronismo.sh"
 PYTHON_SCRIPT_NAME="check_sincronismo.py"
 ENCRYPT_SCRIPT_NAME="encrypt_password.py"
@@ -21,6 +21,11 @@ echo "Verificando e instalando pre-requisitos (git, python3)..."
 yum install -y git python3
 
 # 3. Clonar ou Atualizar o repositorio
+# Garante que o diretorio pai exista e tenha permissoes adequadas
+mkdir -p "$ZABBIX_EXTERNAL_SCRIPTS_DIR"
+chown root:root "$ZABBIX_EXTERNAL_SCRIPTS_DIR"
+chmod 755 "$ZABBIX_EXTERNAL_SCRIPTS_DIR"
+
 if [ -d "$PROJECT_DIR" ]; then
     echo "Diretorio do projeto '$PROJECT_DIR' ja existe. Atualizando..."
     cd "$PROJECT_DIR"
@@ -42,6 +47,7 @@ fi
 
 # 5. Configurar ambiente Python com uv
 echo "Configurando ambiente Python..."
+
 "$UV_INSTALL_PATH" venv
 "$UV_INSTALL_PATH" pip install -r requirements.txt
 
@@ -49,6 +55,7 @@ echo "Configurando ambiente Python..."
 echo "Gerando arquivos de chave e senha..."
 read -s -p "Digite a senha do ERP para criptografar: " ERP_PASSWORD_PLAINTEXT
 echo "" # Nova linha apos a senha
+
 "$UV_INSTALL_PATH" run python "$ENCRYPT_SCRIPT_NAME" "$ERP_PASSWORD_PLAINTEXT"
 
 # 7. Ajustar permissoes dos arquivos de chave e senha
@@ -66,28 +73,28 @@ else
     exit 1
 fi
 
-# 8. Criar o script lancador para o Zabbix
-echo "Criando script lancador para o Zabbix em '$ZABBIX_EXTERNAL_SCRIPTS_DIR/$LAUNCHER_SCRIPT_NAME'..."
-mkdir -p "$ZABBIX_EXTERNAL_SCRIPTS_DIR" # Garante que o diretorio exista
-cat <<EOF > "$ZABBIX_EXTERNAL_SCRIPTS_DIR/$LAUNCHER_SCRIPT_NAME"
+# 8. Criar o script lancador para o Zabbix (dentro do diretorio do projeto)
+echo "Criando script lancador para o Zabbix em '$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME'..."
+cat <<EOF > "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
 #!/bin/bash
 # Wrapper para executar o script python no seu ambiente virtual
 # Este script e chamado pelo Zabbix.
 
-# Navega para o diretorio do projeto
-cd "$PROJECT_DIR" || { echo "Erro: Nao foi possivel navegar para o diretorio do projeto."; exit 1; }
+# Navega para o diretorio do projeto (onde este script esta)
+cd "$(dirname "$0")" || { echo "Erro: Nao foi possivel navegar para o diretorio do projeto."; exit 1; }
 
 # Executa o script Python usando o interpretador do uv run
 # e passa todos os argumentos recebidos pelo Zabbix ($@)
 # O uv run garante que o ambiente virtual correto seja usado.
-"$UV_INSTALL_PATH" run python "$PYTHON_SCRIPT_NAME" "\$@"
+
+"$UV_INSTALL_PATH" run python "$PYTHON_SCRIPT_NAME" "$@"
 EOF
 
-chmod +x "$ZABBIX_EXTERNAL_SCRIPTS_DIR/$LAUNCHER_SCRIPT_NAME"
-chown root:root "$ZABBIX_EXTERNAL_SCRIPTS_DIR/$LAUNCHER_SCRIPT_NAME" # Propriedade root para o launcher
+chmod +x "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
+chown root:root "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME" # Propriedade root para o launcher
 echo "Script lancador criado e configurado."
 
 echo "--- Setup Concluido! ---"
 echo "Por favor, configure o item no Zabbix com a seguinte chave:"
-echo "Key: ${LAUNCHER_SCRIPT_NAME}[\"--url\",\"{\$ERP.URL}\",\"--username\",\"{\$ERP.USER}\",\"--max-delay\",\"{\$MAX.DELAY}\"]"
+echo "Key: zabbix_erp_sincronismo/${LAUNCHER_SCRIPT_NAME}[\"--url\",\"{\$ERP.URL}\",\"--username\",\"{\$ERP.USER}\",\"--max-delay\",\"{\$MAX.DELAY}\"]"
 echo "Lembre-se de definir as macros {\$ERP.URL}, {\$ERP.USER} e {\$MAX.DELAY} no Zabbix."

@@ -25,14 +25,14 @@ Para implantar este monitoramento no seu servidor Zabbix (CentOS 7), siga estes 
     ```
     O script `setup.sh` irá:
     *   Instalar os pré-requisitos (git, python3).
-    *   Clonar/Atualizar o projeto em `/opt/zabbix_erp_sincronismo`.
+    *   Clonar/Atualizar o projeto em `/usr/lib/zabbix/externalscripts/zabbix_erp_sincronismo`.
     *   Instalar e configurar o `uv` e o ambiente Python.
     *   **Pedir a senha do ERP** para criptografá-la e salvar os arquivos de chave e senha com as permissões corretas para o usuário `zabbix`.
-    *   Criar o script lançador (`check_erp_sincronismo.sh`) em `/usr/lib/zabbix/externalscripts/`.
+    *   Criar o script lançador (`check_erp_sincronismo.sh`) *dentro do diretório do projeto*.
 
 3.  **Configure o Item no Zabbix:**
     No seu frontend Zabbix, crie ou atualize o item de monitoramento com a seguinte chave:
-    -   **Key:** `check_erp_sincronismo.sh["--url","{$ERP.URL}","--username","{$ERP.USER}","--max-delay","{$MAX.DELAY}"]`
+    -   **Key:** `zabbix_erp_sincronismo/check_erp_sincronismo.sh["--url","{$ERP.URL}","--username","{$ERP.USER}","--max-delay","{$MAX.DELAY}"]`
 
 4.  **Configure as Macros no Zabbix:**
     Defina as seguintes macros no seu host ou template no Zabbix:
