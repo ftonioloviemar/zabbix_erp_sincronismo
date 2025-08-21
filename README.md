@@ -2,50 +2,42 @@
 
 Este projeto contem um script Python para verificar o status de sincronismo de um ERP (baseado no Tecnicon) e foi projetado para ser usado como um *External Script* no Zabbix.
 
-## Seguranca: Criptografia de Senha Baseada em Arquivo
+## Implantação em Produção (Servidor Zabbix)
 
-Para maximizar a seguranca e evitar senhas em texto plano ou mesmo senhas criptografadas em macros do Zabbix, o script utiliza a biblioteca `vieutil` que opera com um par de arquivos de chave (`.key`) e senha (`.bin`).
+Para implantar este monitoramento no seu servidor Zabbix (CentOS 7), siga estes passos simples:
 
-O fluxo de trabalho e o seguinte:
+1.  **Conecte-se ao seu servidor Zabbix via SSH.**
 
-### Na sua Maquina Local (uma unica vez):
-
-1.  **Execute o script `encrypt_password.py`:**
-    Este script ira gerar dois arquivos importantes, baseados no nome do seu host e usuario (ex: `SEU_PC_SEU_USUARIO.key` e `SEU_PC_SEU_USUARIO.bin`).
+2.  **Clone o repositório e execute o script de setup:**
     ```bash
-    # Ative o ambiente virtual se necessario
-    # uv venv
-    python encrypt_password.py "sua-senha-em-texto-plano"
+    # Navegue para um diretorio temporario, por exemplo, o seu home
+    cd ~
+
+    # Clone o repositorio (se ainda nao o fez)
+    # TROQUE A URL PELA URL DO SEU REPOSITORIO
+    git clone https://github.com/ftonioloviemar/zabbix_erp_sincronismo.git
+
+    # Navegue para a pasta do repositorio clonado
+    cd zabbix_erp_sincronismo
+
+    # Execute o script de setup como root
+    sudo bash setup.sh
     ```
+    O script `setup.sh` irá:
+    *   Instalar os pré-requisitos (git, python3).
+    *   Clonar/Atualizar o projeto em `/opt/zabbix_erp_sincronismo`.
+    *   Instalar e configurar o `uv` e o ambiente Python.
+    *   **Pedir a senha do ERP** para criptografá-la e salvar os arquivos de chave e senha com as permissões corretas para o usuário `zabbix`.
+    *   Criar o script lançador (`check_erp_sincronismo.sh`) em `/usr/lib/zabbix/externalscripts/`.
 
-2.  **Copie os Arquivos Gerados:**
-    Voce tera dois novos arquivos na pasta do projeto. Voce precisa copiá-los de forma segura (usando `scp`, por exemplo) para o servidor Zabbix.
+3.  **Configure o Item no Zabbix:**
+    No seu frontend Zabbix, crie ou atualize o item de monitoramento com a seguinte chave:
+    -   **Key:** `check_erp_sincronismo.sh["--url","{$ERP.URL}","--username","{$ERP.USER}","--max-delay","{$MAX.DELAY}"]`
 
-### No Servidor Zabbix:
+4.  **Configure as Macros no Zabbix:**
+    Defina as seguintes macros no seu host ou template no Zabbix:
+    -   `{$ERP.URL}`: `http://erpdireto:8080` (ou a URL correta do seu ERP)
+    -   `{$ERP.USER}`: `MONITORSINCRONISMO` (ou o usuário de monitoramento do seu ERP)
+    -   `{$MAX.DELAY}`: `300` (ou o limite de atraso em segundos desejado)
 
-1.  **Cole os Arquivos:**
-    Coloque os arquivos `.key` e `.bin` que voce copiou dentro da pasta do projeto no servidor (ex: `/opt/zabbix_erp_sincronismo/`).
-
-2.  **Ajuste o Dono e Permissao (Importante!):**
-    O usuario `zabbix` precisa ser capaz de ler estes arquivos.
-    ```bash
-    sudo chown zabbix:zabbix /opt/zabbix_erp_sincronismo/*.key /opt/zabbix_erp_sincronismo/*.bin
-    sudo chmod 600 /opt/zabbix_erp_sincronismo/*.key /opt/zabbix_erp_sincronismo/*.bin
-    ```
-
-O script `check_sincronismo.py` ira automaticamente localizar e usar esses arquivos para descriptografar a senha em tempo de execucao. Nenhuma senha precisa ser passada como argumento.
-
-## Integracao com Zabbix
-
-1.  **Script Lançador:**
-    Use o script lançador em `/usr/lib/zabbix/externalscripts/check_erp_sincronismo.sh` conforme descrito anteriormente.
-
-2.  **Item no Zabbix (Simplificado):**
-    A chave do item agora e mais simples, pois nao precisa mais da macro de senha.
-    - **Key:** `check_erp_sincronismo.sh["--url","{$ERP.URL}","--username","{$ERP.USER}","--max-delay","{$MAX.DELAY}"]`
-
-3.  **Macros no Host/Template:**
-    - `{$ERP.URL}`: `http://erpdireto:8080`
-    - `{$ERP.USER}`: `MONITORSINCRONISMO`
-    - `{$MAX.DELAY}`: `300`
-    (A macro `{$ERP.PASSWORD}` nao e mais necessaria).
+O script `setup.sh` foi projetado para ser executado apenas uma vez para a configuração inicial e para atualizações futuras (basta rodar `git pull` e `sudo bash setup.sh` novamente).
