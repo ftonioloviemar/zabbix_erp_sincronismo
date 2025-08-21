@@ -6,7 +6,7 @@ ZABBIX_EXTERNAL_SCRIPTS_DIR="/usr/lib/zabbix/externalscripts" # Diretorio pai
 LAUNCHER_SCRIPT_NAME="check_erp_sincronismo.sh"
 PYTHON_SCRIPT_NAME="check_sincronismo.py"
 ENCRYPT_SCRIPT_NAME="encrypt_password.py"
-UV_INSTALL_PATH="/root/.local/bin/uv" # Default uv install path for root
+# UV_INSTALL_PATH="/root/.local/bin/uv" # Removido: uv sera chamado diretamente
 
 echo "--- Iniciando Setup do Monitoramento Zabbix ERP Sincronismo ---"
 
@@ -41,7 +41,7 @@ echo "Gerando arquivos de chave e senha..."
 read -s -p "Digite a senha do ERP para criptografar: " ERP_PASSWORD_PLAINTEXT
 echo "" # Nova linha apos a senha
 
-"$UV_INSTALL_PATH" run python "$ENCRYPT_SCRIPT_NAME" "$ERP_PASSWORD_PLAINTEXT"
+uv run python "$ENCRYPT_SCRIPT_NAME" "$ERP_PASSWORD_PLAINTEXT"
 
 # 5. Ajustar permissoes dos arquivos de chave e senha
 echo "Ajustando permissoes dos arquivos de chave e senha..."
@@ -68,15 +68,9 @@ cat <<EOF > "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
 # Navega para o diretorio do projeto (onde este script esta)
 cd "$(dirname "$0")" || { echo "Erro: Nao foi possivel navegar para o diretorio do projeto."; exit 1; }
 
-# Constrói a lista de argumentos para o script Python
-PYTHON_ARGS=()
-for arg in "$@"; do
-    PYTHON_ARGS+=("$arg")
-done
-
 # Executa o script Python usando uv run, que gerencia o ambiente virtual e dependencias
 # e passa todos os argumentos recebidos pelo Zabbix ($@)
-"$UV_INSTALL_PATH" run python "$PYTHON_SCRIPT_NAME" -- "${PYTHON_ARGS[@]}"
+uv run "$PYTHON_SCRIPT_NAME" "$@"
 EOF
 
 chmod +x "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
