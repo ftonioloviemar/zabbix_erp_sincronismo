@@ -3,6 +3,9 @@ import sys
 import argparse
 import requests
 import re
+import os
+import socket
+import getpass
 from vieutil import Viecry
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
@@ -65,7 +68,6 @@ def get_auth_token(session, base_url, username, password, debug=False):
         with open(debug_filename, "w", encoding="utf-8") as f:
             f.write(response.text)
 
-    # Corrigido para buscar o token em 'preencheSessao', conforme encontrado pelo usuario
     token_match = re.search(r"preencheSessao\s*\(\s*'([^']*)'", response.text)
     if not token_match:
         raise ERPLoginError("Nao foi possivel encontrar o token de autorizacao em preencheSessao(). Verifique a estrutura da pagina de resposta.")
@@ -123,22 +125,24 @@ def main():
     parser = argparse.ArgumentParser(description="Verifica o status de sincronismo do ERP Tecnicon.")
     parser.add_argument('--url', default=os.getenv('ERP_BASE_URL'), help="URL base do ERP.")
     parser.add_argument('--username', default=os.getenv('ERP_USERNAME'), help="Usuario para login.")
-    parser.add_argument('--password', default=os.getenv('ERP_PASSWORD'), help="Senha para login.")
     parser.add_argument('--max-delay', type=int, default=os.getenv('MAX_SECONDS_DELAY'), help="Atraso maximo em segundos permitido.")
     parser.add_argument('--debug', action='store_true', help="Ativa o modo de depuracao, salvando a resposta HTML do login.")
 
     args = parser.parse_args()
 
-    if not all([args.url, args.username, args.password, args.max_delay]):
-        print("Erro: Faltando parametros. Forneca URL, username, password e max-delay via argumentos ou arquivo .env")
+    if not all([args.url, args.username, args.max_delay]):
+        print("Erro: Faltando parametros. Forneca URL, username e max-delay via argumentos ou arquivo .env")
         sys.exit(1)
 
     try:
-        # Descriptografar a senha recebida como argumento
-        cry = Viecry()
-        decrypted_password = cry.descriptografar(args.password)
+        # Descriptografa a senha a partir do arquivo .bin
+        diretorio = os.path.dirname(os.path.realpath(__file__))
+        host = socket.gethostname()
+        user = getpass.getuser()
+        cry = Viecry(diretorio, host, user)
+        decrypted_password = cry.decrypt()
     except Exception as e:
-        print(f"STATUS_PROBLEMA: Falha ao descriptografar a senha. Verifique a chave. Erro: {e}")
+        print(f"STATUS_PROBLEMA: Falha ao descriptografar a senha. Verifique os arquivos .key e .bin. Erro: {e}")
         sys.exit(1)
 
     try:
