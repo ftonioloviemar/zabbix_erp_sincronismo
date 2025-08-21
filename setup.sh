@@ -6,7 +6,6 @@ ZABBIX_EXTERNAL_SCRIPTS_DIR="/usr/lib/zabbix/externalscripts" # Diretorio pai
 LAUNCHER_SCRIPT_NAME="check_erp_sincronismo.sh"
 PYTHON_SCRIPT_NAME="check_sincronismo.py"
 ENCRYPT_SCRIPT_NAME="encrypt_password.py"
-UV_INSTALL_PATH="/root/.local/bin/uv" # Default uv install path for root
 
 echo "--- Iniciando Setup do Monitoramento Zabbix ERP Sincronismo ---"
 
@@ -16,9 +15,9 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# 2. Instalar pre-requisitos (git, python3)
-echo "Verificando e instalando pre-requisitos (git, python3)..."
-yum install -y git python3
+# 2. Instalar pre-requisitos (git, python3, pip)
+echo "Verificando e instalando pre-requisitos (git, python3, pip)..."
+yum install -y git python3 python3-pip
 
 # 3. Clonar ou Atualizar o repositorio
 # Garante que o diretorio pai exista e tenha permissoes adequadas
@@ -31,34 +30,27 @@ if [ -d "$PROJECT_DIR" ]; then
     cd "$PROJECT_DIR"
     git pull origin main
 else
-    echo "Clonando repositorio para '$PROJECT_DIR' நான"
+    echo "Clonando repositorio para '$PROJECT_DIR'"
     # TROQUE A URL PELA URL DO SEU REPOSITORIO
     git clone https://github.com/ftonioloviemar/zabbix_erp_sincronismo.git "$PROJECT_DIR"
     cd "$PROJECT_DIR"
 fi
 
-# 4. Instalar uv (se nao estiver instalado)
-if [ ! -f "$UV_INSTALL_PATH" ]; then
-    echo "Instalando uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-else
-    echo "uv ja esta instalado."
-fi
+# 4. Configurar ambiente Python (venv tradicional)
+echo "Configurando ambiente Python (venv tradicional)..."
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 
-# 5. Configurar ambiente Python com uv
-echo "Configurando ambiente Python..."
-
-"$UV_INSTALL_PATH" venv
-"$UV_INSTALL_PATH" pip install -r requirements.txt
-
-# 6. Gerar arquivos de chave e senha
+# 5. Gerar arquivos de chave e senha
 echo "Gerando arquivos de chave e senha..."
 read -s -p "Digite a senha do ERP para criptografar: " ERP_PASSWORD_PLAINTEXT
 echo "" # Nova linha apos a senha
 
-"$UV_INSTALL_PATH" run python "$ENCRYPT_SCRIPT_NAME" "$ERP_PASSWORD_PLAINTEXT"
+# Executa o script de criptografia dentro do ambiente virtual
+source .venv/bin/activate && python3 "$ENCRYPT_SCRIPT_NAME" "$ERP_PASSWORD_PLAINTEXT"
 
-# 7. Ajustar permissoes dos arquivos de chave e senha
+# 6. Ajustar permissoes dos arquivos de chave e senha
 echo "Ajustando permissoes dos arquivos de chave e senha..."
 # Encontra os arquivos .key e .bin gerados (nome dinamico)
 KEY_FILE=$(find . -maxdepth 1 -name "*.key" -print -quit)
@@ -73,7 +65,7 @@ else
     exit 1
 fi
 
-# 8. Criar o script lancador para o Zabbix (dentro do diretorio do projeto)
+# 7. Criar o script lancador para o Zabbix (dentro do diretorio do projeto)
 echo "Criando script lancador para o Zabbix em '$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME'..."
 cat <<EOF > "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
 #!/bin/bash
@@ -83,11 +75,9 @@ cat <<EOF > "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
 # Navega para o diretorio do projeto (onde este script esta)
 cd "$(dirname "$0")" || { echo "Erro: Nao foi possivel navegar para o diretorio do projeto."; exit 1; }
 
-# Executa o script Python usando o interpretador do uv run
-# e passa todos os argumentos recebidos pelo Zabbix ($@)
-# O uv run garante que o ambiente virtual correto seja usado.
-
-"$UV_INSTALL_PATH" run python "$PYTHON_SCRIPT_NAME" "$@"
+# Ativa o ambiente virtual e executa o script Python
+source .venv/bin/activate
+python3 "$PYTHON_SCRIPT_NAME" "$@"
 EOF
 
 chmod +x "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
@@ -96,5 +86,5 @@ echo "Script lancador criado e configurado."
 
 echo "--- Setup Concluido! ---"
 echo "Por favor, configure o item no Zabbix com a seguinte chave:"
-echo "Key: zabbix_erp_sincronismo/${LAUNCHER_SCRIPT_NAME}[\"--url\",\"{\$ERP.URL}\",\"--username\",\"{\$ERP.USER}\",\"--max-delay\",\"{\$MAX.DELAY}\"]"
-echo "Lembre-se de definir as macros {\$ERP.URL}, {\$ERP.USER} e {\$MAX.DELAY} no Zabbix."
+echo "Key: zabbix_erp_sincronismo/${LAUNCHER_SCRIPT_NAME}["--url","${\ERP.URL}","--username","${\ERP.USER}","--max-delay","${\MAX.DELAY}"]"
+echo "Lembre-se de definir as macros {\\$ERP.URL}, {\$$ERP.USER} e {\$$MAX.DELAY} no Zabbix."
