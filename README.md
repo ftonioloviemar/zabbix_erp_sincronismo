@@ -72,7 +72,27 @@ Para testar o script localmente, apos configurar o `.env`, ative o ambiente virt
 python check_sincronismo.py
 ```
 
-### Integracao com Zabbix
+### Seguranca: Criptografando a Senha
+
+Para evitar armazenar a senha do ERP em texto plano nas macros do Zabbix, o script utiliza a biblioteca `vieutil` para descriptografar a senha em tempo de execucao.
+
+Siga os passos abaixo para gerar a senha criptografada:
+
+1.  **Execute o script auxiliar `encrypt_password.py`:**
+    No seu ambiente local (Windows ou Linux), com as dependencias instaladas, execute:
+    ```bash
+    python encrypt_password.py "sua-senha-em-texto-plano"
+    ```
+
+2.  **Copie a Saida:**
+    O script ira imprimir a senha criptografada. Copie essa string longa.
+
+3.  **Cole no Zabbix:**
+    No Zabbix, vá ate a macro `{$ERP.PASSWORD}` do seu host e cole a senha **criptografada** que voce copiou.
+
+O script principal `check_sincronismo.py` ira se encarregar de descriptografar este valor antes de usa-lo.
+
+## Integracao com Zabbix
 
 1.  **Copie o Script:** Coloque o script `check_sincronismo.py` no diretorio de scripts externos do seu Zabbix Server ou Zabbix Proxy (geralmente `/usr/lib/zabbix/externalscripts`).
 

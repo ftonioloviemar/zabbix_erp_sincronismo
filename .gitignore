@@ -114,3 +114,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Ignorar pasta do WebMethods, arquivos HTML e pasta de debug
+webmethods/
+*.html
+debug/

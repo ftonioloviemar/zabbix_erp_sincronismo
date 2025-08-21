@@ -3,6 +3,7 @@ import sys
 import argparse
 import requests
 import re
+from vieutil import Viecry
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -58,7 +59,10 @@ def get_auth_token(session, base_url, username, password, debug=False):
         raise ERPLoginError(f"Erro de conexao ao tentar logar: {e}")
 
     if debug:
-        with open("login_response_debug.html", "w", encoding="utf-8") as f:
+        debug_dir = "debug"
+        os.makedirs(debug_dir, exist_ok=True)
+        debug_filename = os.path.join(debug_dir, "login_response_debug.html")
+        with open(debug_filename, "w", encoding="utf-8") as f:
             f.write(response.text)
 
     # Corrigido para buscar o token em 'preencheSessao', conforme encontrado pelo usuario
@@ -130,8 +134,16 @@ def main():
         sys.exit(1)
 
     try:
+        # Descriptografar a senha recebida como argumento
+        cry = Viecry()
+        decrypted_password = cry.descriptografar(args.password)
+    except Exception as e:
+        print(f"STATUS_PROBLEMA: Falha ao descriptografar a senha. Verifique a chave. Erro: {e}")
+        sys.exit(1)
+
+    try:
         with requests.Session() as session:
-            token = get_auth_token(session, args.url, args.username, args.password, debug=args.debug)
+            token = get_auth_token(session, args.url, args.username, decrypted_password, debug=args.debug)
             status_html = get_sync_status_page(session, args.url, token)
             status_data = parse_status_page(status_html)
 
@@ -156,7 +168,7 @@ def main():
 
     except (ERPLoginError, StatusFetchError, ParsingError) as e:
         if args.debug:
-            print(f"STATUS_PROBLEMA: {e} Um arquivo de depuracao foi salvo em 'login_response_debug.html'.")
+            print(f"STATUS_PROBLEMA: {e} Um arquivo de depuracao foi salvo em 'debug/login_response_debug.html'.")
         else:
             print(f"STATUS_PROBLEMA: {e}")
         sys.exit(1)
