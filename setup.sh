@@ -70,7 +70,7 @@ cd "/usr/lib/zabbix/externalscripts/zabbix_erp_sincronismo" || { echo "Erro: Nao
 
 # Executa o script Python usando uv run, que gerencia o ambiente virtual e dependencias
 # e passa todos os argumentos recebidos pelo Zabbix ($@)
-uv run "$PYTHON_SCRIPT_NAME" "$@"
+uv run "$PYTHON_SCRIPT_NAME" "\$@"
 EOF
 
 chmod +x "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
@@ -79,5 +79,5 @@ echo "Script lancador criado e configurado."
 
 echo "--- Setup Concluido! ---"
 echo "Por favor, configure o item no Zabbix com a seguinte chave:"
-echo "Key: zabbix_erp_sincronismo/${LAUNCHER_SCRIPT_NAME}[\"--url\",\"{\$ERP.URL}\",\"--username\",\"{\$ERP.USER}\",\"--max-delay\",\"{\$MAX.DELAY}\"]\"
+echo "Key: zabbix_erp_sincronismo/${LAUNCHER_SCRIPT_NAME}[\"--url\",\"{\$ERP.URL}\",\"--username\",\"{\$ERP.USER}\",\"--max-delay\",\"{\$MAX.DELAY}\"]"
 echo "Lembre-se de definir as macros {\$ERP.URL}, {\$ERP.USER} e {\$MAX.DELAY} no Zabbix."
