@@ -58,9 +58,14 @@ else
     exit 1
 fi
 
-# 6. Criar o script lancador para o Zabbix (dentro do diretorio do projeto)
-echo "Criando script lancador para o Zabbix em '$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME'..."
-cat <<EOF > "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
+# 6. Verificar se o script wrapper já existe no projeto
+if [ -f "check_erp_sincronismo.sh" ]; then
+    echo "Script wrapper já existe no projeto. Ajustando permissões..."
+    chmod +x check_erp_sincronismo.sh
+    chown root:root check_erp_sincronismo.sh
+else
+    echo "Criando script lancador para o Zabbix em '$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME'..."
+    cat <<EOF > "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
 #!/bin/bash
 # Wrapper para executar o script python no seu ambiente virtual
 # Este script e chamado pelo Zabbix.
@@ -72,10 +77,10 @@ cd "/usr/lib/zabbix/externalscripts/zabbix_erp_sincronismo" || { echo "Erro: Nao
 # e passa todos os argumentos recebidos pelo Zabbix ($@)
 uv run "$PYTHON_SCRIPT_NAME" "\$@"
 EOF
-
-chmod +x "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
-chown root:root "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME" # Propriedade root para o launcher
-echo "Script lancador criado e configurado."
+    chmod +x "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
+    chown root:root "$PROJECT_DIR/$LAUNCHER_SCRIPT_NAME"
+    echo "Script lancador criado e configurado."
+fi
 
 echo "--- Setup Concluido! ---"
 echo "Por favor, configure o item no Zabbix com a seguinte chave:"

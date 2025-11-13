@@ -132,3 +132,7 @@ g70k_*
 tmp/
 *.tmp
 *.temp
+
+# Regras do projeto (não versionar)
+.trae/
+!.trae/documents/
