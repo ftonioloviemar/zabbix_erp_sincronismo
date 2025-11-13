@@ -25,14 +25,31 @@ graph TD
 zabbix_erp_sincronismo/
 ├── check_sincronismo.py          # Script principal
 ├── encrypt_password.py           # Criptografia de senhas
-├── tests/
-│   └── test_check_sincronismo.py # Suite de testes
-├── logs/                         # Logs com rotação diária
+├── tests/                        # Testes unitários e de integração
+│   ├── test_check_sincronismo.py # Testes unitários principais
+│   ├── teste_parsing.py          # Testes de parsing HTML
+│   └── teste_sincronismo.py      # Testes de sincronismo completo
+├── utils/                        # Utilitários e scripts auxiliares
+│   ├── inspect_viecry.py       # Inspeção da criptografia Viecry
+│   ├── inspect_viecry_detailed.py  # Inspeção detalhada Viecry
+│   └── main.py                 # Template principal (não utilizado)
+├── debug/                        # Arquivos de debug e logs HTML
+│   ├── debug_login_response.html
+│   ├── login_response_debug.html
+│   ├── login_step1_debug.html
+│   ├── login_step2_debug.html
+│   └── empresa_selection_debug.html
+├── tmp/                          # Arquivos temporários e de exemplo
+│   └── teste_html_exemplo.html   # HTML de exemplo para testes
 ├── docs/                         # Documentação técnica
+│   └── TECHNICAL.md            # Documentação técnica detalhada
+├── logs/                         # Logs com rotação diária
 ├── .env                          # Configurações (não versionado)
 ├── .env.example                  # Template de configurações
 ├── setup.sh                      # Script de instalação
-└── requirements.txt              # Dependências Python
+├── pyproject.toml                # Configuração do projeto Python
+├── requirements.txt              # Dependências Python
+└── uv.lock                       # Lock file do uv
 ```
 
 ## 🔧 Configurações Técnicas

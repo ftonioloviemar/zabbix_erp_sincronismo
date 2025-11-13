@@ -20,15 +20,33 @@ Este projeto contém um script Python para verificar o status de sincronismo de 
 
 ```
 zabbix_erp_sincronismo/
-├── check_sincronismo.py      # Script principal de monitoramento
-├── encrypt_password.py       # Utilitário para criptografar senhas
-├── tests/                    # Testes unitários
-│   └── test_check_sincronismo.py
-├── logs/                     # Arquivos de log (gitignored)
-├── .env                      # Configurações do ambiente (gitignored)
-├── .env.example              # Exemplo de configuração
-├── setup.sh                  # Script de instalação para Zabbix
-└── requirements.txt          # Dependências Python
+├── check_sincronismo.py          # Script principal de monitoramento
+├── encrypt_password.py           # Utilitário para criptografar senhas
+├── tests/                      # Testes unitários e de integração
+│   ├── test_check_sincronismo.py   # Testes unitários principais
+│   ├── teste_parsing.py          # Testes de parsing HTML
+│   └── teste_sincronismo.py      # Testes de sincronismo completo
+├── utils/                      # Utilitários e scripts auxiliares
+│   ├── inspect_viecry.py       # Inspeção da criptografia Viecry
+│   ├── inspect_viecry_detailed.py  # Inspeção detalhada Viecry
+│   └── main.py                 # Template principal (não utilizado)
+├── debug/                      # Arquivos de debug e logs HTML
+│   ├── debug_login_response.html
+│   ├── login_response_debug.html
+│   ├── login_step1_debug.html
+│   ├── login_step2_debug.html
+│   └── empresa_selection_debug.html
+├── tmp/                        # Arquivos temporários e de exemplo
+│   └── teste_html_exemplo.html # HTML de exemplo para testes
+├── docs/                       # Documentação técnica
+│   └── TECHNICAL.md          # Documentação técnica detalhada
+├── logs/                       # Arquivos de log (gitignored)
+├── .env                        # Configurações do ambiente (gitignored)
+├── .env.example                # Exemplo de configuração
+├── setup.sh                    # Script de instalação para Zabbix
+├── pyproject.toml              # Configuração do projeto Python
+├── requirements.txt            # Dependências Python
+└── uv.lock                     # Lock file do uv
 ```
 
 ## ⚙️ Configuração Local (Desenvolvimento)
@@ -67,14 +85,25 @@ uv run encrypt_password.py
 
 ### 4. Execução dos Testes
 ```bash
-# Execute os testes unitários
-uv run pytest tests/
+# Execute os testes unitários principais
+uv run pytest tests/test_check_sincronismo.py
 
-# Ou execute o teste específico
-uv run python tests/test_check_sincronismo.py
+# Ou execute testes específicos
+uv run python tests/teste_parsing.py      # Testa parsing HTML
+uv run python tests/teste_sincronismo.py  # Testa sincronismo completo
 ```
 
-### 5. Execução do Script
+### 5. Utilitários
+```bash
+# Criptografar senha do usuário de monitoramento
+uv run encrypt_password.py
+
+# Inspecionar criptografia Viecry
+uv run utils/inspect_viecry.py
+uv run utils/inspect_viecry_detailed.py
+```
+
+### 6. Execução do Script
 ```bash
 # Execute o script de monitoramento
 uv run check_sincronismo.py
