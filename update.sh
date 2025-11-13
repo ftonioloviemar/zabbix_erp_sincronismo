@@ -21,11 +21,11 @@ fi
 
 cd "$PROJECT_DIR"
 
-# 3. Fazer backup dos arquivos de configuração sensíveis
+# 3. Fazer backup dos arquivos de configuração
 echo "Fazendo backup de arquivos de configuração..."
 BACKUP_DIR="/tmp/zabbix_erp_backup_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$BACKUP_DIR"
-cp ./*.key ./*.bin .env "$BACKUP_DIR/" 2>/dev/null || true
+cp .env "$BACKUP_DIR/" 2>/dev/null || true
 
 # 4. Atualizar via git
 echo "Atualizando projeto via git..."
@@ -39,7 +39,7 @@ if [ -f "check_erp_sincronismo.sh" ]; then
     chown root:root check_erp_sincronismo.sh
 fi
 
-# 6. Verificar se os arquivos de configuração ainda existem
+# 6. Verificar se o .env ainda existe
 if [ ! -f .env ]; then
     echo "AVISO: Arquivo .env não encontrado após atualização."
     echo "Restaurando do backup..."

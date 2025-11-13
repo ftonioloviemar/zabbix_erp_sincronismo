@@ -21,14 +21,14 @@ Este projeto contém um script Python para verificar o status de sincronismo de 
 ```
 zabbix_erp_sincronismo/
 ├── check_sincronismo.py          # Script principal de monitoramento
-├── encrypt_password.py           # Utilitário para criptografar senhas
+├── configure_password.sh       # Configurador simplificado de senhas
 ├── tests/                      # Testes unitários e de integração
 │   ├── test_check_sincronismo.py   # Testes unitários principais
 │   ├── teste_parsing.py          # Testes de parsing HTML
 │   └── teste_sincronismo.py      # Testes de sincronismo completo
 ├── utils/                      # Utilitários e scripts auxiliares
-│   ├── inspect_viecry.py       # Inspeção da criptografia Viecry
-│   ├── inspect_viecry_detailed.py  # Inspeção detalhada Viecry
+│   ├── inspect_viecry.py       # Inspeção da criptografia Viecry (legado)
+│   ├── inspect_viecry_detailed.py  # Inspeção detalhada Viecry (legado)
 │   └── main.py                 # Template principal (não utilizado)
 ├── debug/                      # Arquivos de debug e logs HTML
 │   ├── debug_login_response.html
@@ -78,9 +78,9 @@ MAX_SECONDS_DELAY=300
 
 ### 3. Configuração da Senha
 ```bash
-# Criptografe a senha do usuário de monitoramento
-uv run encrypt_password.py
-# Digite a senha quando solicitado
+# Configure a senha no arquivo .env (simplificado - sem criptografia)
+bash configure_password.sh
+# Ou edite manualmente o arquivo .env e adicione: ERP_PASSWORD="sua_senha"
 ```
 
 ### 4. Execução dos Testes
@@ -93,10 +93,10 @@ uv run python tests/teste_parsing.py      # Testa parsing HTML
 uv run python tests/teste_sincronismo.py  # Testa sincronismo completo
 ```
 
-### 5. Utilitários
+### 5. Utilitários (Legado)
 ```bash
-# Criptografar senha do usuário de monitoramento
-uv run encrypt_password.py
+# Scripts de criptografia (antigos - não necessários mais)
+# uv run encrypt_password.py  # Descontinuado - use configure_password.sh
 
 # Inspecionar criptografia Viecry
 uv run utils/inspect_viecry.py

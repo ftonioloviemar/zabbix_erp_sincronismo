@@ -36,27 +36,30 @@ fi
 # 3. Configurar ambiente Python com uv (uv run fara isso automaticamente)
 echo "Configurando ambiente Python (uv run cuidara disso)..."
 
-# 4. Gerar arquivos de chave e senha
-echo "Gerando arquivos de chave e senha..."
-read -s -p "Digite a senha do ERP para criptografar: " ERP_PASSWORD_PLAINTEXT
-echo "" # Nova linha apos a senha
-
-uv run python "$ENCRYPT_SCRIPT_NAME" "$ERP_PASSWORD_PLAINTEXT"
-
-# 5. Ajustar permissoes dos arquivos de chave e senha
-echo "Ajustando permissoes dos arquivos de chave e senha..."
-# Encontra os arquivos .key e .bin gerados (nome dinamico)
-KEY_FILE=$(find . -maxdepth 1 -name "*.key" -print -quit)
-BIN_FILE=$(find . -maxdepth 1 -name "*.bin" -print -quit)
-
-if [ -n "$KEY_FILE" ] && [ -n "$BIN_FILE" ]; then
-    chown zabbix:zabbix "$KEY_FILE" "$BIN_FILE"
-    chmod 600 "$KEY_FILE" "$BIN_FILE"
-    echo "Permissoes ajustadas para $KEY_FILE e $BIN_FILE."
-else
-    echo "ERRO: Arquivos .key ou .bin nao encontrados apos a criptografia."
+# 4. Configurar senha no .env (simplificado - sem criptografia)
+echo "Configurando senha no arquivo .env..."
+if [ ! -f ".env" ]; then
+    echo "ERRO: Arquivo .env não encontrado. Copie .env.example para .env e configure as variáveis."
     exit 1
 fi
+
+# Solicitar senha e atualizar .env
+read -s -p "Digite a senha do ERP: " ERP_PASSWORD_PLAINTEXT
+echo "" # Nova linha apos a senha
+
+# Atualizar a senha no .env (substituir linha existente ou adicionar)
+if grep -q "ERP_PASSWORD=" .env; then
+    # Substituir linha existente
+    sed -i "s|ERP_PASSWORD=.*|ERP_PASSWORD=\"$ERP_PASSWORD_PLAINTEXT\"|" .env
+else
+    # Adicionar nova linha
+    echo "ERP_PASSWORD=\"$ERP_PASSWORD_PLAINTEXT\"" >> .env
+fi
+
+# Ajustar permissões do .env (apenas owner pode ler)
+chown zabbix:zabbix .env
+chmod 600 .env
+echo "Senha configurada no .env com permissões restritas."
 
 # 6. Verificar se o script wrapper já existe no projeto
 if [ -f "check_erp_sincronismo.sh" ]; then

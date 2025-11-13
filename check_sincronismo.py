@@ -3,11 +3,7 @@ import sys
 import argparse
 import requests
 import re
-import os
-import socket
-import getpass
 import logging
-from vieutil import Viecry
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -454,21 +450,20 @@ def main():
         sys.exit(1)
 
     try:
-        # Descriptografa a senha a partir do arquivo .bin
-        diretorio = os.path.dirname(os.path.realpath(__file__))
-        host = socket.gethostname()
-        user = getpass.getuser()
-        cry = Viecry(diretorio, host, user)
-        decrypted_password = cry.decrypt()
-        logger.info(f"Senha descriptografada com sucesso para usuário: {args.username}")
+        # Lê a senha diretamente do .env (simplificado - sem criptografia)
+        password = os.getenv('ERP_PASSWORD')
+        if not password:
+            print("STATUS_PROBLEMA: ERP_PASSWORD não encontrado no arquivo .env")
+            sys.exit(1)
+        logger.info(f"Senha carregada do .env para usuário: {args.username}")
     except Exception as e:
-        print(f"STATUS_PROBLEMA: Falha ao descriptografar a senha. Verifique os arquivos .key e .bin. Erro: {e}")
+        print(f"STATUS_PROBLEMA: Falha ao carregar senha do .env. Erro: {e}")
         sys.exit(1)
 
     try:
         with requests.Session() as session:
             logger.info("Realizando login no ERP...")
-            token = get_auth_token(session, args.url, args.username, decrypted_password, debug=args.debug)
+            token = get_auth_token(session, args.url, args.username, password, debug=args.debug)
             logger.info("Login realizado com sucesso, buscando página de status...")
             status_html = get_sync_status_page(session, args.url, token)
             logger.info("Página de status obtida, analisando dados...")

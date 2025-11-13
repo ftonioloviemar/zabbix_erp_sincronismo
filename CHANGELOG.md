@@ -5,6 +5,26 @@ Todas as alterações notáveis deste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2024-11-13
+
+### Simplificado
+- **Removida criptografia de senhas**: Senha agora é armazenada em texto aberto no .env
+- **Simplificado processo de configuração**: Não precisa mais gerar arquivos .key/.bin
+- **Adicionado configure_password.sh**: Script simples para configurar senha
+- **Atualizado setup.sh**: Agora configura senha diretamente no .env
+- **Atualizado update.sh**: Remove backup de arquivos de criptografia
+
+### Segurança
+- **Permissões restritas no .env**: Arquivo configurado com chmod 600 (apenas owner)
+- **Propriedade zabbix:zabbix**: Arquivo .env pertence ao usuário zabbix
+- **Aviso em .env.example**: Documentado que senha está em texto aberto
+
+### Benefícios da Simplificação
+- **Mais fácil atualização**: Não perde mais credenciais durante git pull
+- **Processo mais simples**: Elimina complexidade da criptografia
+- **Manutenção facilitada**: Configurações centralizadas no .env
+- **Menos dependências**: Remove dependência do vieutil
+
 ## [1.1.0] - 2024-11-13
 
 ### Adicionado
