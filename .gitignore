@@ -121,3 +121,14 @@ webmethods/
 debug/
 *.key
 *.bin
+
+# Arquivos de teste e logs
+teste_*.py
+teste_html_exemplo.html
+check_sincronismo_corrigido.py
+logs/
+*.log
+g70k_*
+tmp/
+*.tmp
+*.temp
