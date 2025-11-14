@@ -1,17 +1,20 @@
 #!/bin/bash
-# Wrapper para executar o script python no seu ambiente virtual
+# Wrapper para executar o script Python no ambiente do Zabbix
 # Este script é chamado pelo Zabbix.
+
+set -e
 
 # Navega para o diretório do projeto (onde este script está)
 cd "/usr/lib/zabbix/externalscripts/zabbix_erp_sincronismo" || { echo "Erro: Não foi possível navegar para o diretório do projeto."; exit 1; }
 
-# Executa o script Python usando uv run, que gerencia o ambiente virtual e dependências
-# e passa todos os argumentos recebidos pelo Zabbix
-uv run "check_sincronismo.py" "$@"
+# Seleciona o comando uv adequado
+UV_CMD="uv"
+if [ -x "/var/lib/zabbix/.local/bin/uv" ]; then
+  UV_CMD="/var/lib/zabbix/.local/bin/uv"
+fi
 
-# Alternativa com configurações mais específicas (descomente se necessário):
-#!/bin/sh
-#set -e
-cd /usr/lib/zabbix/externalscripts/zabbix_erp_sincronismo
+# Garante HOME apropriado para o usuário zabbix (necessário para uv)
 export HOME=/var/lib/zabbix
-exec /var/lib/zabbix/.local/bin/uv run "check_sincronismo.py" "$@"
+
+# Executa o script Python usando uv run e passa todos os argumentos
+exec "$UV_CMD" run "check_sincronismo.py" "$@"
