@@ -210,194 +210,220 @@ def get_sync_status_page(session, base_url, auth_token):
         raise StatusFetchError(f"Erro de conexao ao buscar a pagina de status: {e}")
 
 def parse_status_page(html_content):
-    """Analisa o HTML e extrai os dados de sincronismo."""
+    """Analisa o HTML e extrai os dados de sincronismo conforme condições específicas:
+    
+    Condições de problema:
+    1. Qualquer célula na coluna "Log Filial p/ Sinc." contiver valor (não estiver vazia)
+    2. O último registro enviado exceder o limite de tempo definido
+    
+    Condições de OK:
+    1. Todas as células da coluna "Log Filial p/ Sinc." estiverem vazias
+    2. E a data/hora do último registro estiver dentro do limite definido
+    """
     try:
         soup = BeautifulSoup(html_content, 'lxml')
         
-        # Log para debug - salva o HTML completo para análise
-        logger.info(f"HTML recebido para análise (tamanho: {len(html_content)} caracteres)")
+        # Log para debug
+        logger.info("Iniciando análise da página de status com lógica específica")
         
-        # Salva HTML para debug em arquivo temporário
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
-            f.write(html_content)
-            logger.info(f"HTML salvo em {f.name} para análise detalhada")
-        
-        # Procura por TODAS as tabelas na página
+        # Encontra a tabela de sincronismo
+        tabela = None
+        estrutura_colunas = None  # Para armazenar a estrutura de colunas encontrada
         todas_tabelas = soup.find_all('table')
+        
         logger.info(f"Total de tabelas encontradas: {len(todas_tabelas)}")
         
-        # Procura também por divs que possam conter grids/tabelas
-        divs_grid = soup.find_all('div', class_=lambda x: x and any(termo in str(x).lower() for termo in ['grid', 'table', 'dados', 'vista']))
-        logger.info(f"Total de divs que podem conter grid: {len(divs_grid)}")
-        
-        # Analisa cada tabela encontrada
-        tabela_principal = None
-        linhas_encontradas = []
-        
-        for idx, tabela in enumerate(todas_tabelas):
-            linhas = tabela.find_all('tr')
-            logger.info(f"Tabela {idx}: {len(linhas)} linhas")
-            
-            # Log da estrutura da tabela
-            for i, linha in enumerate(linhas[:3]):  # Log apenas primeiras 3 linhas
-                celulas = linha.find_all(['td', 'th'])
-                conteudo = [c.get_text(strip=True)[:30] for c in celulas[:5]]
-                logger.info(f"  Linha {i}: {len(celulas)} células - {conteudo}")
-            
-            # Se encontrar uma tabela com dados (mais de 1 linha), usa ela
-            if len(linhas) > 1:
-                # Verifica se parece ser uma tabela de sincronismo procurando por palavras-chave
-                texto_tabela = str(tabela).upper()
-                if any(termo in texto_tabela for termo in ['FILIAL', 'SINCRONISMO', 'ENVIO', 'RECEB', 'STATUS']):
-                    logger.info(f"  -> Tabela {idx} parece ser de sincronismo!")
-                    tabela_principal = tabela
-                    linhas_encontradas = linhas
+        # Primeiro, procura por uma tabela que tenha os headers/nomes das colunas
+        for idx, t in enumerate(todas_tabelas):
+            linhas = t.find_all('tr')
+            if len(linhas) > 0:
+                # Analisa a primeira linha
+                primeira_linha = linhas[0].find_all(['th', 'td'])
+                texts_primeira = [h.get_text(strip=True) for h in primeira_linha]
+                
+                # Verifica se parece ser cabeçalho (tem nomes descritivos)
+                parece_cabecalho = False
+                for texto in texts_primeira:
+                    texto_upper = texto.upper()
+                    if any(termo in texto_upper for termo in ['LOG', 'FILIAL', 'DATA', 'HORA', 'ENV', 'SINC']):
+                        parece_cabecalho = True
+                        break
+                
+                if parece_cabecalho:
+                    tabela = t
+                    estrutura_colunas = texts_primeira
+                    logger.info(f"Tabela {idx} com estrutura de colunas encontrada")
+                    logger.info(f"Estrutura: {estrutura_colunas}")
                     break
         
-        # Se não encontrou tabela com dados, tenta as divs
-        if not tabela_principal and divs_grid:
-            for idx, div in enumerate(divs_grid):
-                # Procura por linhas dentro da div
-                linhas = div.find_all(['tr', 'div'], class_=lambda x: x and 'row' in str(x).lower())
-                if len(linhas) > 1:
-                    logger.info(f"Div {idx} parece conter {len(linhas)} linhas de dados")
-                    # Converte para estrutura simulada de tabela
-                    tabela_principal = div
-                    linhas_encontradas = linhas
+        # Se não encontrou tabela com cabeçalho, usa a primeira com dados
+        if not tabela:
+            for idx, t in enumerate(todas_tabelas):
+                linhas = t.find_all('tr')
+                if len(linhas) > 1:  # Mais de 1 linha (dados)
+                    tabela = t
+                    logger.info(f"Usando tabela {idx} com dados como fallback")
                     break
         
-        # Se ainda não encontrou, tenta qualquer estrutura com múltiplas linhas
-        if not tabela_principal:
-            # Procura por qualquer elemento que tenha múltiplas linhas com células
-            possiveis = soup.find_all(['div', 'table', 'tbody'])
-            for elem in possiveis:
-                linhas = elem.find_all(['tr', 'div'], recursive=False)
-                if len(linhas) > 2:  # Mais de 2 linhas pode indicar dados
-                    logger.info(f"Encontrada estrutura alternativa com {len(linhas)} linhas")
-                    tabela_principal = elem
-                    linhas_encontradas = linhas
-                    break
-        
-        if not tabela_principal:
-            logger.error("Nenhuma tabela ou estrutura de dados encontrada")
+        if not tabela:
+            logger.error("Nenhuma tabela de sincronismo encontrada")
             raise ParsingError("Não foi possível encontrar a tabela de sincronismo")
         
-        logger.info(f"Usando estrutura com {len(linhas_encontradas)} linhas totais")
+        # Agora procura a tabela que tem os dados reais
+        tabela_dados = None
+        linhas_dados = []
         
-        # Se só tem 1 linha (cabeçalho), trata como caso especial
-        if len(linhas_encontradas) <= 1:
-            logger.warning("Apenas cabeçalho encontrado, verificando se há erro na página...")
+        for idx, t in enumerate(todas_tabelas):
+            linhas = t.find_all('tr')
+            # Pula a tabela que já usamos para pegar a estrutura
+            if t == tabela:
+                continue
             
-            # Procura por mensagens de erro em qualquer lugar da página
-            if any(termo in html_content.upper() for termo in ['ERRO', 'FALHA', 'PROBLEMA', 'INVALID']):
-                logger.warning("Encontrada mensagem de erro no HTML")
-                return {
-                    'data_ultimo_envio': '',
-                    'hora_ultimo_envio': '',
-                    'problema_envio': 'ERRO_DETECTADO_HTML: Erro encontrado na página de sincronismo',
-                    'problema_receb': '',
-                }
+            if len(linhas) > 0:
+                # Verifica se tem dados (não é só cabeçalho)
+                primeira_linha = linhas[0].find_all(['th', 'td'])
+                texts_primeira = [h.get_text(strip=True) for h in primeira_linha]
+                
+                # Se não parece cabeçalho e tem múltiplas linhas, é provavelmente dados
+                if not any(termo in ' '.join(texts_primeira).upper() for termo in ['LOG', 'FILIAL', 'DATA', 'HORA', 'ENV', 'SINC']) and len(linhas) > 1:
+                    tabela_dados = t
+                    linhas_dados = linhas
+                    logger.info(f"Tabela {idx} com dados encontrada")
+                    break
+        
+        # Se não encontrou tabela com dados, usa a primeira que não seja a de estrutura
+        if not tabela_dados and len(todas_tabelas) > 1:
+            for idx, t in enumerate(todas_tabelas):
+                if t != tabela and len(t.find_all('tr')) > 1:
+                    tabela_dados = t
+                    linhas_dados = t.find_all('tr')
+                    logger.info(f"Usando tabela {idx} como fallback para dados")
+                    break
+        
+        if not tabela_dados:
+            logger.error("Nenhuma tabela com dados encontrada")
+            raise ParsingError("Não foi possível encontrar tabela com dados de sincronismo")
+        
+        # Usa a estrutura encontrada anteriormente
+        header_texts = estrutura_colunas
+        logger.info(f"Usando estrutura de colunas: {header_texts}")
+        
+        # Encontra índices das colunas necessárias
+        coluna_log_idx = None
+        coluna_data_envio_idx = None
+        coluna_hora_envio_idx = None
+        
+        logger.info("Procurando índices das colunas...")
+        for idx, header in enumerate(header_texts):
+            header_upper = header.upper().strip()
+            logger.info(f"Analisando coluna {idx}: '{header}' -> '{header_upper}'")
             
-            return {
-                'data_ultimo_envio': '',
-                'hora_ultimo_envio': '',
-                'problema_envio': 'SEM_DADOS_SINCRONISMO: Nenhum dado de sincronismo encontrado na tabela',
-                'problema_receb': '',
-            }
+            # Procura por coluna de log (prioridade máxima)
+            if 'LOG FILIAL' in header_upper and 'SINC' in header_upper:
+                coluna_log_idx = idx
+                logger.info(f"✅ Coluna 'Log Filial p/ Sinc.' encontrada no índice: {idx}")
+            
+            # Procura por data de envio
+            elif 'DATA' in header_upper and 'ENV' in header_upper and 'ULT' in header_upper:
+                coluna_data_envio_idx = idx
+                logger.info(f"✅ Coluna 'Data Ult. Reg. Env.' encontrada no índice: {idx}")
+            
+            # Procura por hora de envio
+            elif 'HORA' in header_upper and ('ENV' in header_upper or 'ULT' in header_upper):
+                coluna_hora_envio_idx = idx
+                logger.info(f"✅ Coluna 'Hora Ultimo Reg. Env.' encontrada no índice: {idx}")
         
-        # Usa as linhas encontradas
-        linhas = linhas_encontradas[1:]  # Pula cabeçalho
+        # Se não encontrou os índices específicos, tenta correspondência parcial
+        if coluna_log_idx is None:
+            for idx, header in enumerate(header_texts):
+                header_upper = header.upper()
+                if 'LOG' in header_upper and ('FILIAL' in header_upper or 'SINC' in header_upper):
+                    coluna_log_idx = idx
+                    logger.info(f"✅ Coluna de log encontrada por correspondência parcial no índice: {idx}")
+                    break
         
-        # Variáveis para armazenar os problemas encontrados em qualquer linha
-        problema_envio_global = ""
-        problema_receb_global = ""
-        data_ultimo_envio = ""
-        hora_ultimo_envio = ""
-        filiais_com_erro = []
+        if coluna_data_envio_idx is None:
+            for idx, header in enumerate(header_texts):
+                header_upper = header.upper()
+                if 'DATA' in header_upper and 'ENV' in header_upper:
+                    coluna_data_envio_idx = idx
+                    logger.info(f"✅ Coluna de data de envio encontrada no índice: {idx}")
+                    break
         
-        logger.info(f"Analisando {len(linhas)} linhas da tabela de sincronismo")
+        if coluna_hora_envio_idx is None:
+            for idx, header in enumerate(header_texts):
+                header_upper = header.upper()
+                if 'HORA' in header_upper and ('ENV' in header_upper or 'ULT' in header_upper):
+                    coluna_hora_envio_idx = idx
+                    logger.info(f"✅ Coluna de hora de envio encontrada no índice: {idx}")
+                    break
         
-        # Analisa cada linha da tabela
-        for idx, linha in enumerate(linhas):
-            # Pega todas as células da linha
+        # Log final dos índices
+        logger.info(f"Índices finais - Log: {coluna_log_idx}, Data: {coluna_data_envio_idx}, Hora: {coluna_hora_envio_idx}")
+        
+        # Se ainda não encontrou, tenta por posição baseado na estrutura típica
+        if coluna_data_envio_idx is None and len(header_texts) > 7:
+            coluna_data_envio_idx = 7  # Baseado no debug: Data Ult. Reg. Env. está no índice 7
+            logger.info(f"Usando índice padrão para data de envio: {coluna_data_envio_idx}")
+            
+        if coluna_hora_envio_idx is None and len(header_texts) > 8:
+            coluna_hora_envio_idx = 8  # Baseado no debug: Hora Ultimo Reg. Env. está no índice 8
+            logger.info(f"Usando índice padrão para hora de envio: {coluna_hora_envio_idx}")
+            
+        if coluna_log_idx is None and len(header_texts) > 12:
+            coluna_log_idx = 12  # Baseado no debug: Log Filial p/ Sinc. está no índice 12
+            logger.info(f"Usando índice padrão para log filial: {coluna_log_idx}")
+        
+        # Processa os dados da tabela de dados
+        logger.info(f"Processando {len(linhas_dados)} linhas de dados")
+        
+        # Variáveis para armazenar os resultados
+        log_com_conteudo = False
+        conteudo_log = []
+        ultima_data_envio = None
+        ultima_hora_envio = None
+        
+        # Analisa cada linha de dados
+        for idx, linha in enumerate(linhas_dados):
             celulas = linha.find_all('td')
-            if len(celulas) < 2:  # Verifica se tem pelo menos 2 células (filial + dados)
+            if len(celulas) <= max(coluna_log_idx or 0, coluna_data_envio_idx or 0, coluna_hora_envio_idx or 0):
                 logger.warning(f"Linha {idx+1} ignorada: apenas {len(celulas)} células")
                 continue
             
-            # Pega o nome da filial (primeira coluna)
-            filial = celulas[0].get_text(strip=True) if celulas else f"Linha {idx+1}"
-            logger.info(f"Analisando linha {idx+1}: Filial '{filial}' ({len(celulas)} células)")
+            # Verifica a coluna de log
+            if coluna_log_idx is not None and coluna_log_idx < len(celulas):
+                texto_log = celulas[coluna_log_idx].get_text(strip=True)
+                if texto_log:  # Se tem conteúdo (não está vazio)
+                    log_com_conteudo = True
+                    conteudo_log.append(texto_log)
+                    logger.info(f"Linha {idx+1}: Log com conteúdo encontrado: '{texto_log}'")
             
-            # Flag para indicar se esta linha tem erro
-            linha_com_erro = False
-            mensagens_erro_linha = []  # Muda para lista para capturar múltiplos erros
-            
-            # Verifica cada célula da linha para detectar erros
-            for celula_idx, celula in enumerate(celulas):
-                # Pega o texto da célula
-                texto_celula = celula.get_text(strip=True)
-                
-                # Verifica o estilo da célula (fundo amarelo indica erro)
-                estilo_celula = celula.get('style', '').lower()
-                classe_celula = celula.get('class', [])
-                classe_celula_str = ' '.join(classe_celula) if isinstance(classe_celula, list) else str(classe_celula)
-                
-                # Detecta erro por fundo amarelo
-                tem_fundo_amarelo = ('background-color: yellow' in estilo_celula or 
-                                   'background: yellow' in estilo_celula or
-                                   'bgcolor="yellow"' in str(celula))
-                
-                # Detecta erro por fundo vermelho/laranja (status 500)
-                tem_fundo_vermelho = ('background-color: red' in estilo_celula or 
-                                    'background: red' in estilo_celula or
-                                    'background-color: orange' in estilo_celula or
-                                    'background: orange' in estilo_celula or
-                                    'bgcolor="red"' in str(celula) or
-                                    'bgcolor="orange"' in str(celula))
-                
-                # Detecta erro por texto
-                tem_erro_texto = any(palavra in texto_celula.upper() for palavra in ['ERRO', 'PROBL', 'INVÁLIDO', 'INVALID', 'FALHA', 'FAIL'])
-                
-                # Detecta status HTTP de erro (500, 404, etc)
-                tem_status_erro = any(str(num) in texto_celula for num in ['500', '404', '403', '502', '503'])
-                
-                # Detecta erro por classe CSS
-                tem_classe_erro = any(classe in classe_celula_str.lower() for classe in ['error', 'erro', 'probl', 'fail', 'danger'])
-                
-                if tem_fundo_amarelo or tem_fundo_vermelho or tem_erro_texto or tem_classe_erro or tem_status_erro:
-                    linha_com_erro = True
-                    # Adiciona a mensagem de erro à lista
-                    if texto_celula and texto_celula not in mensagens_erro_linha:  # Evita duplicatas
-                        mensagens_erro_linha.append(texto_celula)
-                    logger.warning(f"  -> Erro detectado na célula {celula_idx}: '{texto_celula}' (fundo_amarelo={tem_fundo_amarelo}, fundo_vermelho={tem_fundo_vermelho}, erro_texto={tem_erro_texto}, status_erro={tem_status_erro}, classe_erro={tem_classe_erro})")
-                    # NÃO dá break - continua verificando para capturar todos os erros da linha
-            
-            # Se encontrou erro na linha, adiciona à lista
-            if linha_com_erro:
-                filiais_com_erro.append(filial)
-                # Junta todas as mensagens de erro da linha
-                mensagem_completa = " | ".join(mensagens_erro_linha) if mensagens_erro_linha else "Erro detectado"
-                if problema_envio_global:
-                    problema_envio_global += f" | [{filial}]: {mensagem_completa}"
-                else:
-                    problema_envio_global = f"[{filial}]: {mensagem_completa}"
+            # Pega a data/hora do último registro (da última linha válida)
+            if coluna_data_envio_idx is not None and coluna_hora_envio_idx is not None:
+                if coluna_data_envio_idx < len(celulas) and coluna_hora_envio_idx < len(celulas):
+                    data_texto = celulas[coluna_data_envio_idx].get_text(strip=True)
+                    hora_texto = celulas[coluna_hora_envio_idx].get_text(strip=True)
+                    
+                    if data_texto and hora_texto:
+                        ultima_data_envio = data_texto
+                        ultima_hora_envio = hora_texto
+                        logger.info(f"Última data/hora encontrada: {data_texto} {hora_texto}")
         
-        # Se não encontrou data/hora específica, tenta pegar da primeira linha válida
-        if not data_ultimo_envio:
-            for linha in linhas:
-                celulas = linha.find_all('td')
-                if len(celulas) >= 3:  # Assume que data e hora estão nas colunas 1 e 2
-                    data_ultimo_envio = celulas[1].get_text(strip=True) if len(celulas) > 1 else ""
-                    hora_ultimo_envio = celulas[2].get_text(strip=True) if len(celulas) > 2 else ""
-                    if data_ultimo_envio and hora_ultimo_envio:
-                        logger.info(f"Data/hora encontradas: {data_ultimo_envio} {hora_ultimo_envio}")
-                        break
+        # Prepara os resultados
+        problema_envio = ""
+        problema_receb = ""
         
-        # Se ainda não encontrou data/hora, tenta encontrar em qualquer lugar da página
+        # Verificação 1: Log Filial p/ Sinc. com conteúdo
+        if log_com_conteudo:
+            problema_envio = f"Log com problema: {' | '.join(conteudo_log)}"
+            logger.info(f"Problema detectado: {problema_envio}")
+        
+        # Verificação 2: Data/hora do último envio
+        data_ultimo_envio = ultima_data_envio or ""
+        hora_ultimo_envio = ultima_hora_envio or ""
+        
+        # Se não encontrou data/hora, tenta encontrar no HTML geral
         if not data_ultimo_envio or not hora_ultimo_envio:
-            # Procura por padrões de data e hora no HTML
             data_match = re.search(r'(\d{2}/\d{2}/\d{4})', html_content)
             hora_match = re.search(r'(\d{2}:\d{2}:\d{2})', html_content)
             
@@ -408,29 +434,31 @@ def parse_status_page(html_content):
                 hora_ultimo_envio = hora_match.group(1)
                 logger.info(f"Hora encontrada via regex: {hora_ultimo_envio}")
         
-        # Log resumo da análise
-        if filiais_com_erro:
-            logger.error(f"Erros encontrados nas filiais: {', '.join(filiais_com_erro)}")
-        else:
-            logger.info("Nenhum erro encontrado nas filiais analisadas")
+        # Se ainda não encontrou, usa valores padrão
+        if not data_ultimo_envio:
+            data_ultimo_envio = datetime.now().strftime('%d/%m/%Y')
+            logger.warning(f"Data não encontrada, usando valor padrão: {data_ultimo_envio}")
+        if not hora_ultimo_envio:
+            hora_ultimo_envio = datetime.now().strftime('%H:%M:%S')
+            logger.warning(f"Hora não encontrada, usando valor padrão: {hora_ultimo_envio}")
         
-        # Se não encontrou nenhuma data/hora, usa data/hora atual como fallback
-        if not data_ultimo_envio or not hora_ultimo_envio:
-            agora = datetime.now()
-            data_ultimo_envio = agora.strftime('%d/%m/%Y')
-            hora_ultimo_envio = agora.strftime('%H:%M:%S')
-            logger.warning(f"Data/hora não encontradas, usando valores atuais: {data_ultimo_envio} {hora_ultimo_envio}")
+        # Log do resultado final
+        if log_com_conteudo:
+            logger.info(f"Status: PROBLEMA - Log com conteúdo detectado")
+        else:
+            logger.info(f"Status: OK - Log vazio, verificando tempo...")
         
         data = {
             'data_ultimo_envio': data_ultimo_envio,
             'hora_ultimo_envio': hora_ultimo_envio,
-            'problema_envio': problema_envio_global,
-            'problema_receb': problema_receb_global,
+            'problema_envio': problema_envio,
+            'problema_receb': problema_receb,
         }
         return data
         
-    except AttributeError as e:
-        raise ParsingError(f"Erro ao analisar a pagina de status. Um campo esperado (ID) nao foi encontrado. Detalhes: {e}")
+    except Exception as e:
+        logger.error(f"Erro ao analisar página: {e}")
+        raise ParsingError(f"Erro ao analisar a página de status: {e}")
 
 def main():
     """Funcao principal do script."""
@@ -469,32 +497,36 @@ def main():
             logger.info("Página de status obtida, analisando dados...")
             status_data = parse_status_page(status_html)
 
-        # Verifica se há problemas no sincronismo
-        tem_problema = bool(status_data['problema_envio']) or bool(status_data['problema_receb'])
+        # Verifica se há problemas no sincronismo conforme condições específicas
+        tem_problema_log = bool(status_data['problema_envio'])  # Problema na coluna Log Filial p/ Sinc.
         
-        if tem_problema:
-            # Verifica se é o caso especial de sem dados
-            if 'SEM_DADOS_SINCRONISMO' in status_data['problema_envio']:
-                logger.warning("Nenhum dado de sincronismo encontrado - pode indicar que não há sincronismo configurado")
-                print("STATUS_PROBLEMA: Nenhum dado de sincronismo encontrado na tabela - verificar se há sincronismo configurado")
-                sys.exit(1)
-            
-            logger.error(f"Problemas detectados: {status_data['problema_envio']} | {status_data['problema_receb']}")
-            print(f"STATUS_PROBLEMA: {status_data['problema_envio']} | {status_data['problema_receb']}")
+        # Se há problema no log, retorna imediatamente com o conteúdo do log
+        if tem_problema_log:
+            logger.error(f"Problema detectado na coluna Log Filial p/ Sinc.: {status_data['problema_envio']}")
+            print(f"STATUS_PROBLEMA: {status_data['problema_envio']}")
             sys.exit(1)
 
+        # Se não há problema no log, verifica o tempo
         datetime_str = f"{status_data['data_ultimo_envio']} {status_data['hora_ultimo_envio']}"
         try:
             last_sync_time = datetime.strptime(datetime_str, '%d/%m/%Y %H:%M:%S')
         except ValueError:
-             raise ParsingError(f"Formato de data/hora inesperado: '{datetime_str}'")
+            raise ParsingError(f"Formato de data/hora inesperado: '{datetime_str}'")
 
         current_time = datetime.now()
         delay = (current_time - last_sync_time).total_seconds()
 
         if delay > args.max_delay:
-            logger.error(f"Sincronismo atrasado em {int(delay)} segundos (limite: {args.max_delay}s)")
-            print(f"STATUS_PROBLEMA: Sincronismo atrasado em {int(delay)} segundos (limite: {args.max_delay}s).")
+            # Formata o tempo excedido (segundos ou minutos)
+            if delay > 60:
+                minutos = int(delay // 60)
+                segundos = int(delay % 60)
+                tempo_excedido = f"{minutos} minutos e {segundos} segundos"
+            else:
+                tempo_excedido = f"{int(delay)} segundos"
+            
+            logger.error(f"Sincronismo atrasado - tempo excedido: {tempo_excedido} (limite: {args.max_delay}s)")
+            print(f"STATUS_PROBLEMA: Tempo excedido em {tempo_excedido} (limite: {args.max_delay}s)")
             sys.exit(1)
 
         logger.info("Sincronismo funcionando corretamente")
